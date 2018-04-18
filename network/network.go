@@ -10,12 +10,10 @@ import (
 	//"io/ioutil"
 )
 
-type ping bool
+type ping struct {}
+
 const(
-	PING 	ping	= false
-	Ack_order 	= 0
-	Ack_state 	= 1
-	Ack_order_accept= 2
+	//PING 	ping	= false
 	NO_GRANT	= -1
 
 	_PING_PERIOD 	= 1000
@@ -27,9 +25,17 @@ var PORT []string = []string {":10001",
 var IP []string = []string {"8.8.8.8",
 				"9.9.9.9"}
 
+type dtype int
+const(
+	PING	dtype	= 0
+	ACK		= 1
+	INT		= 2
+	STRING		= 3
+)
 type tag int
 type capsule struct {
 	item_tag	tag
+	datatype	dtype
 	data		interface{}
 }
 
@@ -133,7 +139,7 @@ func (r *Remote) remote_listener() {
 		
 		switch data := message.data.(type) {
 		case ping:
-		
+			fmt.Println("Received ping!")
 		case ack:
 			fmt.Println("Received ack:", data.item_tag)
 			
@@ -165,6 +171,8 @@ func (r *Remote) remote_broadcaster() {
 func (r *Remote) ping_remote() {
 	const active	time.Duration = time.Duration(_PING_PERIOD)*time.Millisecond
 	const idle 	time.Duration = 5*time.Second
+	//var p = ping{}
+
 	for {
 		if (r.alive) {
 			time.Sleep(active)
@@ -172,7 +180,7 @@ func (r *Remote) ping_remote() {
 			time.Sleep(idle)
 		}
 		
-		r.Send(PING)
+		r.Send(ping{})
 	}
 }
 
@@ -212,37 +220,37 @@ func (r *Remote) watchdog(kick <- chan bool) {
 	fmt.Println("Connection with remote", r.id, "lost.")
 }
 
-/*
-func ip_address(adr string) string {
-	var is_int = true
-	for _, char := range adr {
-		if (char == '.') {
-			is_int = false
-		}
-	}
-	if (is_int == true) {
-		index, err := strconv.Atoi(adr)
-		if (err != nil) {
-			fmt.Println("Argument is invalid, try another.")
-			os.Exit(2)
-		}
-		if (index > def.WORKSPACES || index < 1) {
-			fmt.Println("An argument is out of bounds. Please try another number or target IP address.")
-			os.Exit(2)
-		}
-		return def.WORKSPACE[index]
-	} else {
-		return adr
-	}
-}
-*/
-
 func (r *Remote) Send(data interface{}) {
-	
 	var packet capsule = capsule{}
-	packet.data 	= data
-	packet.item_tag = r.create_tag()
 	
+	switch datatype := data.(type) {
+	case ping:
+		fmt.Println("Sending ping!")
+		packet.datatype = PING
+		packet.data 	= 0
+		packet.item_tag = 0
+	case ack:
+		fmt.Println("Sending ack!")
+		packet.datatype = ACK
+		packet.data 	= data
+		packet.item_tag = 0
+	case int:
+		fmt.Println("Sending int!")
+		packet.datatype = INT
+		packet.data 	= data
+		packet.item_tag = r.create_tag()
+	case string:
+		fmt.Println("Sending string!")
+		packet.datatype = STRING
+		packet.data 	= data
+		packet.item_tag = r.create_tag()
+	default:
+		fmt.Println("Sending random??", datatype)
+		packet.datatype = -1
+		packet.data 	= data
+		packet.item_tag = r.create_tag()
+	}
+
 	r.send <- packet
 }
 
