@@ -42,7 +42,7 @@ type capsule struct {
 }
 
 type ack struct {
-	item_tag	data
+	ItemTag		data
 }
 
 type Remote struct {
@@ -140,15 +140,15 @@ func (r *Remote) remote_listener() {
 		check(err)
 		fmt.Println(length, "-----------",message)
 		
-		switch message.datatype {
+		switch message.DataType {
 		case PING:
 			fmt.Println("Received ping!")
 			fmt.Println(message)
 		case ACK:
-			fmt.Println("Received ack:", int(message.item_data))
+			fmt.Println("Received ack:", int(message.ItemData))
 			
 		default:
-			fmt.Println("Received data:", message.item_data)
+			fmt.Println("Received data:", message.ItemData)
 		}
 		
 	}
@@ -165,8 +165,8 @@ func (r *Remote) ping_remote() {
 			time.Sleep(idle)
 		}
 		var cap capsule
-		cap.item_tag = r.create_tag()
-		fmt.Println("tag:", cap.item_tag)
+		cap.ItemTag = r.create_tag()
+		fmt.Println("tag:", cap.ItemTag)
 		r.send_ack(cap)
 		
 		//r.Send(ping{})
@@ -175,7 +175,7 @@ func (r *Remote) ping_remote() {
 
 func (r *Remote) send_ack(reference capsule) {
 	var response ack = ack{}
-	response.item_tag = item_tag2data(reference)
+	response.ItemTag = item_tag2data(reference)
 	r.Send(response)
 }
 
@@ -189,7 +189,7 @@ func assert_capsule(d interface{}) data {
 	
 	if a_int, ok := d.(capsule); ok {
 		var idata data
-		idata = data(a_int.item_tag)
+		idata = data(a_int.ItemTag)
 		fmt.Println("iData:",idata)
 		return idata
 	} else {
@@ -202,33 +202,33 @@ func assert_capsule(d interface{}) data {
 func (r *Remote) Send(idata interface{}) {
 	var packet capsule = capsule{}
 	
-	switch datatype := idata.(type) {
+	switch DataType := idata.(type) {
 	case ping:
 		fmt.Println("Sending ping!")
-		packet.datatype = PING
-		packet.item_data= 0
-		packet.item_tag = 0
+		packet.DataType = PING
+		packet.ItemData= 0
+		packet.ItemTag = 0
 	case ack:
 		fmt.Println("Sending ack!")
-		packet.datatype = ACK
-		packet.item_data= assert_ack(idata)
-		packet.item_tag = r.create_tag()
+		packet.DataType = ACK
+		packet.ItemData= assert_ack(idata)
+		packet.ItemTag = r.create_tag()
 		
 	case int:
 		fmt.Println("Sending int!")
-		packet.datatype = INT
-		packet.item_data= assert_int(idata)
-		packet.item_tag = r.create_tag()
+		packet.DataType = INT
+		packet.ItemData= assert_int(idata)
+		packet.ItemTag = r.create_tag()
 	case string:
 		fmt.Println("Sending string!")
-		packet.datatype = STRING
-		packet.item_data= 0
-		packet.item_tag = r.create_tag()
+		packet.DataType = STRING
+		packet.ItemData= 0
+		packet.ItemTag = r.create_tag()
 	default:
-		fmt.Println("Sending unknown datatype!", datatype)
-		packet.datatype = -1
-		packet.item_data= 0
-		packet.item_tag = r.create_tag()
+		fmt.Println("Sending unknown datatype!", DataType)
+		packet.DataType = -1
+		packet.ItemData= 0
+		packet.ItemTag = r.create_tag()
 	}
 
 	r.send <- packet
@@ -236,7 +236,7 @@ func (r *Remote) Send(idata interface{}) {
 
 func assert_ack(d interface{}) data {
 	if a_int, ok := d.(ack); ok {
-		return data(a_int.item_tag)
+		return data(a_int.ItemTag)
 	} else {
 		fmt.Println("Something went wrong when sending ack.")
 		return 0
