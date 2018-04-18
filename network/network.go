@@ -161,7 +161,7 @@ func (r *Remote) remote_broadcaster() {
 			encoded, err := json.Marshal(msg)
 			check(err)
 			out_connection.Write(encoded)
-			//fmt.Println("Sent:", msg)
+			fmt.Println("Sent:", msg)
 		}
 	}
 }
