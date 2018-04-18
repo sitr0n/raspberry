@@ -29,16 +29,16 @@ var IP []string = []string {"8.8.8.8",
 type dtype int
 const(
 	PING	dtype	= 0
-	ACK		= 1
-	INT		= 2
-	STRING		= 3
+	ACK	dtype	= 1
+	INT	dtype	= 2
+	STRING	dtype	= 3
 )
 type tag int
 type data int
 type capsule struct {
-	datatype	dtype
-	item_tag	tag
-	item_data	data
+	DataType	dtype
+	ItemTag		tag
+	ItemData	data
 }
 
 type ack struct {
@@ -49,7 +49,7 @@ type Remote struct {
 	id		int
 	info	  	remote_info
 	alive 		bool
-	send		chan interface{}
+	send		chan capsule
 	received	chan interface{}
 	ackchan		chan ack
 	Reconnected	chan bool
@@ -75,7 +75,7 @@ func Init(r *[cf.MAX_REMOTES]Remote) {
 		r[i].id 		= i
 		r[i].info 		= address_list[i]
 		r[i].alive 		= false
-		r[i].send 		= make(chan interface{}, 100)
+		r[i].send 		= make(chan capsule, 100)
 		r[i].received 		= make(chan interface{}, 100)
 		r[i].ackchan 		= make(chan ack, 100)
 		r[i].Reconnected 	= make(chan bool, 100)
@@ -98,11 +98,12 @@ func (r *Remote) remote_broadcaster() {
 	out_connection, err := net.DialUDP("udp", nil, target_addr)
 	check(err)
 	defer out_connection.Close()
-
+	var msg capsule
 	for {
 		select {
-		case msg := <- r.send:
+		case msg = <- r.send:
 			encoded, err := json.Marshal(msg)
+			fmt.Println("encoded:", encoded)
 			check(err)
 			out_connection.Write(encoded)
 			fmt.Println("Sent:", msg)
@@ -137,7 +138,7 @@ func (r *Remote) remote_listener() {
 		
 		err := json.Unmarshal(buffer[:length], &message)
 		check(err)
-		fmt.Println("-----------",message)
+		fmt.Println(length, "-----------",message)
 		
 		switch message.datatype {
 		case PING:
@@ -211,7 +212,7 @@ func (r *Remote) Send(idata interface{}) {
 		fmt.Println("Sending ack!")
 		packet.datatype = ACK
 		packet.item_data= assert_ack(idata)
-		packet.item_tag = 0
+		packet.item_tag = r.create_tag()
 		
 	case int:
 		fmt.Println("Sending int!")
