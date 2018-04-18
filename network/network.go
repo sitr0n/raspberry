@@ -10,8 +10,9 @@ import (
 	//"io/ioutil"
 )
 
+type ping bool
 const(
-	PING 		= false
+	PING 	ping	= false
 	Ack_order 	= 0
 	Ack_state 	= 1
 	Ack_order_accept= 2
@@ -38,7 +39,7 @@ type ack struct {
 
 type Remote struct {
 	id		int
-	address  	string
+	info	  	remote_info
 	alive 		bool
 	send		chan interface{}
 	received	chan interface{}
@@ -64,22 +65,23 @@ func Init(r *[2]Remote) {
 	
 	for i := 0; i < NUM_REMOTES; i++ {
 		r[i].id 		= i
-		//r[i].address 		= address_list[i].IP
+		r[i].info 		= address_list[i]
 		r[i].alive 		= false
 		r[i].send 		= make(chan interface{}, 100)
 		r[i].received 		= make(chan interface{}, 100)
 		r[i].ackchan 		= make(chan ack, 100)
-		r[i].Reconnected 	= make (chan bool, 100)
-		r[i].tag_req 		= make (chan bool, 100)
+		r[i].Reconnected 	= make(chan bool, 100)
+		r[i].tag_req 		= make(chan bool, 100)
 		r[i].tag_rm 		= make(chan tag, 100)
 		r[i].tag_grant		= make(chan tag, 100)
 		
-		//go r[i].tag_handler()
-		//go r[i].remote_listener()
-		//go r[i].remote_broadcaster()
+		go r[i].tag_handler()
+		go r[i].remote_listener()
+		go r[i].remote_broadcaster()
+		go r[i].ping_remote()
 	}
 	//go ping_remotes(r)
-	
+
 }
 
 func (r *Remote) await_ack(expecting int) bool {
@@ -109,10 +111,7 @@ func (r *Remote) remote_listener() {
 	in_connection, err := net.ListenUDP("udp", listen_addr)
 	check(err)
 	defer in_connection.Close()
-	
 	//var ack ack
-
-	const ACK_SIZE = 2
 	
 	var message capsule
 	
@@ -127,21 +126,26 @@ func (r *Remote) remote_listener() {
 		}
 		wd_kick <- true
 		
-		switch length {
-		case ACK_SIZE:
-			fmt.Println("Received ack!")
-		default:
+		err := json.Unmarshal(buffer[:length], &message)
+		check(err)
+		fmt.Println("Received package!\nSize:", length)
+		fmt.Println("Tag:", message.item_tag, "\nData:", message.data)
+		
+		switch data := message.data.(type) {
+		case ping:
+		
+		case ack:
+			fmt.Println("Received ack:", data.item_tag)
 			
-			err := json.Unmarshal(buffer[:length], &message)
-			check(err)
-			fmt.Println("Received package!\nSize:", length)
-			fmt.Println("Tag:", message.item_tag, "\nData:", message.data)
+		default:
+			fmt.Println("Received data:", data)
 		}
+		
 	}
 }
 
 func (r *Remote) remote_broadcaster() {
-	target_addr,err := net.ResolveUDPAddr("udp", r.address + PORT[r.id])
+	target_addr,err := net.ResolveUDPAddr("udp", r.info.IP + PORT[r.id])
 	check(err)
 	out_connection, err := net.DialUDP("udp", nil, target_addr)
 	check(err)
@@ -158,12 +162,17 @@ func (r *Remote) remote_broadcaster() {
 	}
 }
 
-func ping_remotes(remote *[1]Remote) { // 2 LITERALS INSTEAD OF CONST
+func (r *Remote) ping_remote() {
+	const active	time.Duration = time.Duration(_PING_PERIOD)*time.Millisecond
+	const idle 	time.Duration = 5*time.Second
 	for {
-		time.Sleep(time.Duration(_PING_PERIOD)*time.Millisecond)
-		for i := 0; i < 1; i++ {
-			remote[i].send <- PING
+		if (r.alive) {
+			time.Sleep(active)
+		} else {
+			time.Sleep(idle)
 		}
+		
+		r.Send(PING)
 	}
 }
 
@@ -246,7 +255,7 @@ func (r *Remote) create_tag() tag {
 func (r *Remote) tag_handler() {
 	fmt.Println("R", r.id, "- tag handler started.")
 	var id_list []tag = []tag{}
-	for{ 
+	for { 
 		select {
 		case <- r.tag_req:
 			new_tag := make_tag(&id_list)
