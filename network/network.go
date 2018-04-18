@@ -137,6 +137,7 @@ func (r *Remote) remote_listener() {
 		switch message.datatype {
 		case PING:
 			fmt.Println("Received ping!")
+			fmt.Println(message)
 		case ACK:
 			fmt.Println("Received ack:", message.data)
 			
@@ -176,7 +177,9 @@ func (r *Remote) ping_remote() {
 		} else {
 			time.Sleep(idle)
 		}
-		r.send_ack(3)
+		var response ack = ack{}
+		response.item_tag = tag(12)
+		r.Send(response)
 		
 		//r.Send(ping{})
 	}
@@ -230,8 +233,15 @@ func (r *Remote) Send(data interface{}) {
 	case ack:
 		fmt.Println("Sending ack!")
 		packet.datatype = ACK
-		packet.data 	= data
-		packet.item_tag = 0
+		if a_ack, ok := data.(ack); ok {
+			packet.data 	= a_ack
+			packet.item_tag = 0
+		} else {
+			packet.data 	= 0
+			packet.item_tag = 0
+			fmt.Println("Something went wrong when sending ack.")
+		}
+		
 	case int:
 		fmt.Println("Sending int!")
 		packet.datatype = INT
