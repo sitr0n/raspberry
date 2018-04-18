@@ -1,12 +1,13 @@
 package main
-
+import nw "./network"
+import cf "./config"
 import ("fmt"
 )
-import nw "./network"
+
 
 const REMOTES = 2
 func main() {
-	var remote [REMOTES]nw.Remote
+	var remote [cf.MAX_REMOTES]nw.Remote
 
 	nw.Init(&remote)
 	

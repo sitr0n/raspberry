@@ -1,4 +1,5 @@
 package network
+import cf "../config"
 import (
 	"fmt"
 	"net"
@@ -62,14 +63,14 @@ type remote_info struct {
 }
 
 var _localip string
-
-func Init(r *[2]Remote) {
+var _REMOTES int
+func Init(r *[cf.MAX_REMOTES]Remote) {
 	_localip = get_localip()
 	
 	address_list := load_address()
-	NUM_REMOTES := len(address_list)
+	_REMOTES = len(address_list)
 	
-	for i := 0; i < NUM_REMOTES; i++ {
+	for i := 0; i < _REMOTES; i++ {
 		r[i].id 		= i
 		r[i].info 		= address_list[i]
 		r[i].alive 		= false
@@ -86,8 +87,6 @@ func Init(r *[2]Remote) {
 		go r[i].remote_broadcaster()
 		go r[i].ping_remote()
 	}
-	//go ping_remotes(r)
-
 }
 
 func (r *Remote) await_ack(expecting int) bool {
@@ -108,7 +107,7 @@ func (r *Remote) await_ack(expecting int) bool {
 func (r *Remote) send_ack(reference int) {
 	var response ack = ack{}
 	response.item_tag = tag(reference)
-	r.send <- response
+	r.Send(response)
 }
 
 func (r *Remote) remote_listener() {
@@ -134,17 +133,15 @@ func (r *Remote) remote_listener() {
 		
 		err := json.Unmarshal(buffer[:length], &message)
 		check(err)
-		fmt.Println("Received package!\nSize:", length)
-		fmt.Println("Tag:", message.item_tag, "\nData:", message.data)
 		
-		switch data := message.data.(type) {
-		case ping:
+		switch message.datatype {
+		case PING:
 			fmt.Println("Received ping!")
-		case ack:
-			fmt.Println("Received ack:", data.item_tag)
+		case ACK:
+			fmt.Println("Received ack:", message.data)
 			
 		default:
-			fmt.Println("Received data:", data)
+			fmt.Println("Received data:", message.data)
 		}
 		
 	}
@@ -163,7 +160,7 @@ func (r *Remote) remote_broadcaster() {
 			encoded, err := json.Marshal(msg)
 			check(err)
 			out_connection.Write(encoded)
-			fmt.Println("Sent:", msg)
+			//fmt.Println("Sent:", msg)
 		}
 	}
 }
@@ -179,8 +176,9 @@ func (r *Remote) ping_remote() {
 		} else {
 			time.Sleep(idle)
 		}
+		r.send_ack(3)
 		
-		r.Send(ping{})
+		//r.Send(ping{})
 	}
 }
 
@@ -391,4 +389,8 @@ func check(e error) {
 	if (e != nil) {
 		panic(e)
 	}
+}
+
+func Get_remotes() int {
+	return _REMOTES
 }
