@@ -4,13 +4,11 @@ import ("fmt"
 )
 import nw "./network"
 
-const REMOTES = 1
+const REMOTES = 2
 func main() {
 	var remote [REMOTES]nw.Remote
-	var addr []string
-	//addr[0] = "10"
-	//addr[1] = 11
-	nw.Init(addr, &remote)
+
+	nw.Init(&remote)
 	
 	fmt.Println("started...")
 	for {

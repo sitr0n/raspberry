@@ -7,7 +7,7 @@ import (
 	//"os"
 	//"strconv"
 	"math/rand"
-	"io/ioutil"
+	//"io/ioutil"
 )
 
 const(
@@ -18,7 +18,7 @@ const(
 	NO_GRANT	= -1
 
 	_PING_PERIOD 	= 1000
-	ADDR_LIST_PATH	= "network/addresslist.json"
+	ADDR_LIST_PATH	= "../addresslist.json"
 )
 
 var PORT []string = []string {":10001",
@@ -50,17 +50,21 @@ type Remote struct {
 }
 
 type remote_info struct {
-	name		string
-	ip		string
+	Name		string
+	IP		string
 }
+
 var _localip string
 
-func Init(remote_address []string, r *[1]Remote) {
+func Init(r *[2]Remote) {
 	_localip = get_localip()
-	NUM_REMOTES := len(r)
+	
+	address_list := load_address()
+	NUM_REMOTES := len(address_list)
+	
 	for i := 0; i < NUM_REMOTES; i++ {
 		r[i].id 		= i
-		r[i].address 		= IP[i]
+		//r[i].address 		= address_list[i].IP
 		r[i].alive 		= false
 		r[i].send 		= make(chan interface{}, 100)
 		r[i].received 		= make(chan interface{}, 100)
@@ -76,77 +80,6 @@ func Init(remote_address []string, r *[1]Remote) {
 	}
 	//go ping_remotes(r)
 	
-	//var addr []remote_info = []remote_info{}
-	///*
-	var new_addr remote_info
-	
-	//new_addr.name = "rasberry"
-	//new_addr.ip = "192.168.1.123"
-	//fmt.Println(new_addr)
-	
-	//addr = add_address(addr, new_addr)
-	//fmt.Println(addr)
-	//save_state(&new_addr)
-	//save_address_list(&addr)
-	load_state(&new_addr)
-	//addr = load_address_list()
-	fmt.Println("Loaded:", new_addr)
-}
-
-func add_address(original []remote_info, new_addr remote_info) []remote_info {
-	n := len(original)
-	if (n == cap(original)) {
-		new_list := make([]remote_info, len(original), 2*len(original)+1)
-		copy(new_list, original)
-		original = new_list
-	}
-	original = original[0 : n+1]
-	original[n] = new_addr
-	
-	//save_address_list(original)
-	
-	return original
-}
-
-func load_state(state *remote_info) {	
-	jsonState, err := ioutil.ReadFile(ADDR_LIST_PATH)
-	check(err)
-	fmt.Println("Loaded encoded:", jsonState)
-	err = json.Unmarshal(jsonState, &state)
-	check(err)
-	fmt.Println("Loaded decoded:", *state)
-
-}
-
-func save_state(state *remote_info) {
-	jsonState, err := json.Marshal(state)
-	check(err)
-
-	err = ioutil.WriteFile(ADDR_LIST_PATH, jsonState, 0644)
-	check(err)
-	fmt.Println("Wrote to file:", jsonState)
-}
-
-func save_address_list(addr_list *[]remote_info) {
-	fmt.Println("Saving address list:", addr_list)
-	encoded, err := json.Marshal(addr_list)
-	check(err)
-
-	fmt.Println("Raw data:", encoded)
-	err = ioutil.WriteFile(ADDR_LIST_PATH, encoded, 0644)
-	check(err)
-	fmt.Println("After save:", encoded)
-}
-
-func load_address_list() []remote_info {	
-	encoded, err := ioutil.ReadFile(ADDR_LIST_PATH)
-	check(err)
-	
-	var addr_list []remote_info
-	err = json.Unmarshal(encoded, &addr_list)
-	check(err)
-	
-	return addr_list
 }
 
 func (r *Remote) await_ack(expecting int) bool {
@@ -169,7 +102,6 @@ func (r *Remote) send_ack(reference int) {
 	response.item_tag = tag(reference)
 	r.send <- response
 }
-
 
 func (r *Remote) remote_listener() {
 	listen_addr, err := net.ResolveUDPAddr("udp", _localip + PORT[r.id])
@@ -221,6 +153,7 @@ func (r *Remote) remote_broadcaster() {
 			encoded, err := json.Marshal(msg)
 			check(err)
 			out_connection.Write(encoded)
+			fmt.Println("Sent:", msg)
 		}
 	}
 }
