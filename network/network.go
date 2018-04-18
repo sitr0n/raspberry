@@ -34,14 +34,15 @@ const(
 	STRING		= 3
 )
 type tag int
+type data int
 type capsule struct {
-	item_tag	tag
 	datatype	dtype
-	data		interface{}
+	item_tag	tag
+	item_data	data
 }
 
 type ack struct {
-	item_tag	tag
+	item_tag	data
 }
 
 type Remote struct {
@@ -89,26 +90,29 @@ func Init(r *[cf.MAX_REMOTES]Remote) {
 	}
 }
 
-func (r *Remote) await_ack(expecting int) bool {
-	timeout := make(chan bool)
-	timer_cancel := make(chan bool)
-	go timeout_timer(timer_cancel, timeout)
-	
-	select {
-	case <- r.ackchan:
-		timer_cancel <- true
-		return true
-	
-	case <- timeout:
-		return false
+
+
+func (r *Remote) remote_broadcaster() {
+	target_addr,err := net.ResolveUDPAddr("udp", r.info.IP + PORT[r.id])
+	check(err)
+	out_connection, err := net.DialUDP("udp", nil, target_addr)
+	check(err)
+	defer out_connection.Close()
+
+	for {
+		select {
+		case msg := <- r.send:
+			encoded, err := json.Marshal(msg)
+			check(err)
+			out_connection.Write(encoded)
+			fmt.Println("Sent:", msg)
+		}
 	}
 }
 
-func (r *Remote) send_ack(reference int) {
-	var response ack = ack{}
-	response.item_tag = tag(reference)
-	r.Send(response)
-}
+
+
+
 
 func (r *Remote) remote_listener() {
 	listen_addr, err := net.ResolveUDPAddr("udp", _localip + PORT[r.id])
@@ -133,39 +137,21 @@ func (r *Remote) remote_listener() {
 		
 		err := json.Unmarshal(buffer[:length], &message)
 		check(err)
+		fmt.Println("-----------",message)
 		
 		switch message.datatype {
 		case PING:
 			fmt.Println("Received ping!")
 			fmt.Println(message)
 		case ACK:
-			fmt.Println("Received ack:", message.data)
+			fmt.Println("Received ack:", int(message.item_data))
 			
 		default:
-			fmt.Println("Received data:", message.data)
+			fmt.Println("Received data:", message.item_data)
 		}
 		
 	}
 }
-
-func (r *Remote) remote_broadcaster() {
-	target_addr,err := net.ResolveUDPAddr("udp", r.info.IP + PORT[r.id])
-	check(err)
-	out_connection, err := net.DialUDP("udp", nil, target_addr)
-	check(err)
-	defer out_connection.Close()
-
-	for {
-		select {
-		case msg := <- r.send:
-			encoded, err := json.Marshal(msg)
-			check(err)
-			out_connection.Write(encoded)
-			fmt.Println("Sent:", msg)
-		}
-	}
-}
-
 func (r *Remote) ping_remote() {
 	const active	time.Duration = time.Duration(_PING_PERIOD)*time.Millisecond
 	const idle 	time.Duration = 5*time.Second
@@ -177,13 +163,110 @@ func (r *Remote) ping_remote() {
 		} else {
 			time.Sleep(idle)
 		}
-		var response ack = ack{}
-		response.item_tag = tag(12)
-		r.Send(response)
+		var cap capsule
+		cap.item_tag = r.create_tag()
+		fmt.Println("tag:", cap.item_tag)
+		r.send_ack(cap)
 		
 		//r.Send(ping{})
 	}
 }
+
+func (r *Remote) send_ack(reference capsule) {
+	var response ack = ack{}
+	response.item_tag = item_tag2data(reference)
+	r.Send(response)
+}
+
+func item_tag2data(it capsule) data {
+	var re data
+	re = assert_capsule(it)
+	return re
+}
+
+func assert_capsule(d interface{}) data {
+	
+	if a_int, ok := d.(capsule); ok {
+		var idata data
+		idata = data(a_int.item_tag)
+		fmt.Println("iData:",idata)
+		return idata
+	} else {
+		fmt.Println("Something went wrong asserting capsule.")
+		return 0
+	}
+}
+
+
+func (r *Remote) Send(idata interface{}) {
+	var packet capsule = capsule{}
+	
+	switch datatype := idata.(type) {
+	case ping:
+		fmt.Println("Sending ping!")
+		packet.datatype = PING
+		packet.item_data= 0
+		packet.item_tag = 0
+	case ack:
+		fmt.Println("Sending ack!")
+		packet.datatype = ACK
+		packet.item_data= assert_ack(idata)
+		packet.item_tag = 0
+		
+	case int:
+		fmt.Println("Sending int!")
+		packet.datatype = INT
+		packet.item_data= assert_int(idata)
+		packet.item_tag = r.create_tag()
+	case string:
+		fmt.Println("Sending string!")
+		packet.datatype = STRING
+		packet.item_data= 0
+		packet.item_tag = r.create_tag()
+	default:
+		fmt.Println("Sending unknown datatype!", datatype)
+		packet.datatype = -1
+		packet.item_data= 0
+		packet.item_tag = r.create_tag()
+	}
+
+	r.send <- packet
+}
+
+func assert_ack(d interface{}) data {
+	if a_int, ok := d.(ack); ok {
+		return data(a_int.item_tag)
+	} else {
+		fmt.Println("Something went wrong when sending ack.")
+		return 0
+	}
+}
+
+func assert_int(d interface{}) data {
+	if a_int, ok := d.(int); ok {
+		return data(a_int)
+	} else {
+		fmt.Println("Something went wrong when sending int.")
+		return 0
+	}
+}
+
+func (r *Remote) await_ack(expecting int) bool {
+	timeout := make(chan bool)
+	timer_cancel := make(chan bool)
+	go timeout_timer(timer_cancel, timeout)
+	
+	select {
+	case <- r.ackchan:
+		timer_cancel <- true
+		return true
+	
+	case <- timeout:
+		return false
+	}
+}
+
+
 
 func timeout_timer(cancel <- chan bool, timeout chan <- bool) {
 	for i := 0; i < 10; i++ {
@@ -221,46 +304,7 @@ func (r *Remote) watchdog(kick <- chan bool) {
 	fmt.Println("Connection with remote", r.id, "lost.")
 }
 
-func (r *Remote) Send(data interface{}) {
-	var packet capsule = capsule{}
-	
-	switch datatype := data.(type) {
-	case ping:
-		fmt.Println("Sending ping!")
-		packet.datatype = PING
-		packet.data 	= 0
-		packet.item_tag = 0
-	case ack:
-		fmt.Println("Sending ack!")
-		packet.datatype = ACK
-		if a_ack, ok := data.(ack); ok {
-			packet.data 	= a_ack
-			packet.item_tag = 0
-		} else {
-			packet.data 	= 0
-			packet.item_tag = 0
-			fmt.Println("Something went wrong when sending ack.")
-		}
-		
-	case int:
-		fmt.Println("Sending int!")
-		packet.datatype = INT
-		packet.data 	= data
-		packet.item_tag = r.create_tag()
-	case string:
-		fmt.Println("Sending string!")
-		packet.datatype = STRING
-		packet.data 	= data
-		packet.item_tag = r.create_tag()
-	default:
-		fmt.Println("Sending random??", datatype)
-		packet.datatype = -1
-		packet.data 	= data
-		packet.item_tag = r.create_tag()
-	}
 
-	r.send <- packet
-}
 
 func (r *Remote) create_tag() tag {
 	r.tag_req <- true
