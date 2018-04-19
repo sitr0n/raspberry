@@ -3,6 +3,7 @@ package network
 import ("io/ioutil"
 	"encoding/json"
 	"fmt"
+	"net"
 )
 
 func load_address() []remote_info {
@@ -99,3 +100,19 @@ func test_load() remote_info {
 	return state
  }
 
+func get_localip() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	check(err)
+	defer conn.Close()
+
+	ip_with_port := conn.LocalAddr().String()
+
+	var ip string = ""
+	for _, char := range ip_with_port {
+		if (char == ':') {
+			break
+		}
+		ip += string(char)
+	}
+	return ip
+}

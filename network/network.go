@@ -99,7 +99,7 @@ func (r *Remote) sender(packet capsule) {
 		r.tag_rm <- packet.ItemTag
 		ok := r.check_for_ack(packet.ItemTag)
 		miss++
-		if (ok == true || (miss < 3)) {
+		if (ok == true || (miss < 3) || !r.alive) {
 			//fmt.Println("DataAck chain complete!")
 			break
 		}
@@ -243,7 +243,7 @@ func (r *Remote) Send(idata interface{}) {
 		packet.ItemTag = r.create_tag()
 		r.send <- packet	
 	case int:
-		//fmt.Println("Sending int!")
+		fmt.Println("Sending int!")
 		packet.DataType = INT
 		packet.ItemData= assert_int(idata)
 		packet.ItemTag = r.create_tag()
@@ -321,10 +321,12 @@ func (r *Remote) tag_handler() {
 		case <- r.tag_req:
 			new_tag := make_tag(&id_list)
 			r.tag_grant <- new_tag
+			fmt.Println("Created tag:", new_tag)
 			
 		case remove := <- r.tag_rm:
 			id_list = remove_tag(id_list, remove)
 			_rm_list = remove_tag(_rm_list, remove)
+			fmt.Println("Removed tag:", remove)
 			
 		case new_ack := <- r.ackchan:
 			_rm_list = add_tag(_rm_list, new_ack)
@@ -393,54 +395,18 @@ func remove_tag(original []tag, remove tag) []tag {
 			}
 		}
 		if (found > 0) {
-			//original = make([]tag, length - found)
+			original = make([]tag, length - found)
 			copy(original, temp_list)
 		} else {
-			fmt.Println("Couldn't find referenced tag.")
+			//fmt.Println("Couldn't find referenced tag.", original, remove)
 		}
 	} else {
-		fmt.Println("No tags to remove.")
+		//fmt.Println("No tags to remove.")
 	}
 	
 	return original
 }
 
-/*
-func ip_address(adr interface{}) def.IP {
-	switch a := adr.(type) {
-	case string:
-		return a
-	case int:
-		if (a > 23 || a < 0) {
-			fmt.Println("Workspace index is out of bounds. Please abort process and try another argument!")
-			for {
-			}
-		} else {
-			return def.WORKSPACE[a]
-		}
-	default:
-		fmt.Println("Wrong data type passed to network.Init. Try string or workspace number.")
-		return "0"
-	}
-}
-*/
-
-func get_localip() string {
-	conn, err := net.Dial("udp", "8.8.8.8:80")
-	check(err)
-	defer conn.Close()
-
-	ip_with_port := conn.LocalAddr().String()
-
-	var ip string = ""
-	for _, char := range ip_with_port {
-		if (char == ':') {
-			break
-		}
-		ip += string(char)
-	}
-	return ip
-}
 
 
 
