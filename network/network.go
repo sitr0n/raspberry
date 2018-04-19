@@ -100,7 +100,7 @@ func (r *Remote) sender(packet capsule) {
 		ok := r.check_for_ack(packet.ItemTag)
 		miss++
 		if (ok == true || (miss < 3)) {
-			fmt.Println("DataAck chain complete!")
+			//fmt.Println("DataAck chain complete!")
 			break
 		}
 		packet.ItemTag = r.create_tag()
@@ -197,8 +197,7 @@ func (r *Remote) ping_remote() {
 		} else {
 			time.Sleep(idle)
 		}
-		r.Send(int(12))
-		//r.Send(ping{})
+		r.Send(ping{})
 	}
 }
 
@@ -232,25 +231,25 @@ func (r *Remote) Send(idata interface{}) {
 	
 	switch DataType := idata.(type) {
 	case ping:
-		fmt.Println("Sending ping!")
+		//fmt.Println("Sending ping!")
 		packet.DataType = PING
 		packet.ItemData= 0
 		packet.ItemTag = 0
 		r.send <- packet
 	case ack:
-		fmt.Println("Sending ack!")
+		//fmt.Println("Sending ack!")
 		packet.DataType = ACK
 		packet.ItemData= assert_ack(idata)
 		packet.ItemTag = r.create_tag()
 		r.send <- packet	
 	case int:
-		fmt.Println("Sending int!")
+		//fmt.Println("Sending int!")
 		packet.DataType = INT
 		packet.ItemData= assert_int(idata)
 		packet.ItemTag = r.create_tag()
 		go r.sender(packet)
 	case string:
-		fmt.Println("Sending string!")
+		//fmt.Println("Sending string!")
 		packet.DataType = STRING
 		packet.ItemData= 0
 		packet.ItemTag = r.create_tag()
