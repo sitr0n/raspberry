@@ -4,7 +4,37 @@ import ("io/ioutil"
 	"encoding/json"
 	"fmt"
 	"net"
+	"strconv"
 )
+
+// Fix later
+func create_port(index int) string {
+	var port string = ":10000"
+	s := strconv.Itoa(index)
+	s = s_reverse(s)
+	r_port := []rune(port)
+	for i := len(port)-1; i >= 0; i-- {
+		if(index < 10 && i < 5) {
+			//fmt.Println(string(r_port))
+			return string(r_port)
+		} else if (index < 100 && i < 4) {
+			//fmt.Println(string(r_port))
+			return string(r_port)
+		}
+		number := []rune(s)[5-i]
+		r_port[i] = number
+	}
+	return "0"
+}
+
+func s_reverse(s string) string {
+    runes := []rune(s)
+    for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+        runes[i], runes[j] = runes[j], runes[i]
+    }
+    return string(runes)
+}
+
 
 func load_address() []remote_info {
 	encoded, err := ioutil.ReadFile(ADDR_LIST_PATH)
@@ -23,6 +53,7 @@ func load_address() []remote_info {
 	check(err)
 	
 	fmt.Println("Loaded address.")
+	_REMOTES = len(addr_list)
 	return addr_list
 }
 

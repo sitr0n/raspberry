@@ -7,24 +7,17 @@ import (
 	"encoding/json"
 	//"os"
 	//"strconv"
-	"math/rand"
 	//"io/ioutil"
 )
 
 type ping struct {}
 
 const(
-	//PING 	ping	= false
 	NO_GRANT	= -1
 
 	_PING_PERIOD 	= 1000
 	ADDR_LIST_PATH	= "../addresslist.json"
 )
-
-var PORT []string = []string {":10001",
-				":10002"}
-var IP []string = []string {"8.8.8.8",
-				"9.9.9.9"}
 
 type dtype int
 const(
@@ -46,42 +39,44 @@ type ack struct {
 }
 
 type Remote struct {
+	Receive		chan interface{}
+	Connected	chan bool
 	id		int
 	info	  	remote_info
+	port		string
 	alive 		bool
 	send		chan capsule
-	Receive		chan interface{}
-	ackchan		chan tag
-	Connected	chan bool
 	tag_req		chan bool
 	tag_rm		chan tag
-	tag_grant	chan tag	
+	tag_grant	chan tag
+	ackchan		chan tag
+	rm_list		[]tag
 }
 
 type remote_info struct {
 	Name		string
 	IP		string
 }
-var _rm_list []tag // GÅR IKKE MED MER ENN TO REMOTES
+
 var _localip string
 var _REMOTES int
 func Init(r *[cf.MAX_REMOTES]Remote) {
 	_localip = get_localip()
-	
 	address_list := load_address()
-	_REMOTES = len(address_list)
 	
 	for i := 0; i < _REMOTES; i++ {
+		r[i].Receive		= make(chan interface{}, 100)
+		r[i].Connected 		= make(chan bool, 100)
 		r[i].id 		= i
 		r[i].info 		= address_list[i]
+		r[i].port		= create_port(i)
 		r[i].alive 		= false
 		r[i].send 		= make(chan capsule, 100)
-		r[i].Receive		= make(chan interface{}, 100)
-		r[i].ackchan 		= make(chan tag, 100)
-		r[i].Connected 		= make(chan bool, 100)
 		r[i].tag_req 		= make(chan bool, 100)
 		r[i].tag_rm 		= make(chan tag, 100)
 		r[i].tag_grant		= make(chan tag, 100)
+		r[i].ackchan 		= make(chan tag, 100)
+		r[i].rm_list		= []tag{}
 		
 		go r[i].tag_handler()
 		go r[i].remote_listener()
@@ -108,7 +103,7 @@ func (r *Remote) sender(packet capsule) {
 }
 
 func (r *Remote) check_for_ack(t tag) bool {
-	for _, e := range _rm_list {
+	for _, e := range r.rm_list {
 		if (t == e) {
 			return true
 		}
@@ -118,7 +113,7 @@ func (r *Remote) check_for_ack(t tag) bool {
 
 
 func (r *Remote) remote_broadcaster() {
-	target_addr,err := net.ResolveUDPAddr("udp", r.info.IP + PORT[r.id])
+	target_addr,err := net.ResolveUDPAddr("udp", r.info.IP + r.port)
 	check(err)
 	out_connection, err := net.DialUDP("udp", nil, target_addr)
 	check(err)
@@ -140,7 +135,7 @@ func (r *Remote) remote_broadcaster() {
 
 
 func (r *Remote) remote_listener() {
-	listen_addr, err := net.ResolveUDPAddr("udp", _localip + PORT[r.id])
+	listen_addr, err := net.ResolveUDPAddr("udp", _localip + r.port)
 	check(err)
 	in_connection, err := net.ListenUDP("udp", listen_addr)
 	check(err)
@@ -307,107 +302,6 @@ func (r *Remote) watchdog(kick <- chan bool) {
 }
 
 
-
-func (r *Remote) create_tag() tag {
-	r.tag_req <- true
-	granted := <- r.tag_grant
-	return granted
-}
-
-func (r *Remote) tag_handler() {
-	fmt.Println("R", r.id, "- tag handler started.")
-	var id_list []tag = []tag{}
-	 _rm_list = []tag{}
-	for { 
-		select {
-		case <- r.tag_req:
-			new_tag := make_tag(&id_list)
-			r.tag_grant <- new_tag
-			//fmt.Println("Created tag:", new_tag)
-			
-		case remove := <- r.tag_rm:
-			id_list = remove_tag(id_list, remove)
-			_rm_list = remove_tag(_rm_list, remove)
-			//fmt.Println("Removed tag:", remove)
-			
-		case new_ack := <- r.ackchan:
-			_rm_list = add_tag(_rm_list, new_ack)
-		}	
-	}
-}
-
-func make_tag(list *[]tag) tag {
-	length := len(*list)
-	list_copy := *list
-	var id_unique bool
-	var counter int
-	var new_id tag
-	for {
-		counter ++
-		new_id = random_tag()
-		id_unique = true
-		for i := 0; i < length; i++ {
-			var check tag = list_copy[i]
-			if (new_id == check) {
-				id_unique = false
-			}
-		}
-		if (id_unique == true) {
-			break
-		}
-		if (counter > 10000) {
-			fmt.Println("func make_tag is hanging. Tag list size:", length)
-			counter = 0
-		}
-	}
-	*list = add_tag(*list, new_id)
-	
-	return new_id
-}
-
-func random_tag() tag {
-	random := rand.Intn(10000)
-	var r tag = tag(random)
-	return r
-}
-
-func add_tag(list []tag, new tag) []tag {
-	n := len(list)
-	if (n == cap(list)) {
-		new_list := make([]tag, len(list), 2*len(list)+1)
-		copy(new_list, list)
-		list = new_list
-	}
-	list = list[0 : n+1]
-	list[n] = new
-	
-	return list
-}
-
-func remove_tag(original []tag, remove tag) []tag {
-	length := len(original)
-	temp_list := make([]tag, length)
-	if (length > 0) {
-		found 	:= 0
-		for i := 0; i < length; i++ {
-			if (original[i] != remove ) {
-				temp_list[i - found] = original[i]
-			} else {
-				found ++
-			}
-		}
-		if (found > 0) {
-			original = make([]tag, length - found)
-			copy(original, temp_list)
-		} else {
-			//fmt.Println("Couldn't find referenced tag.", original, remove)
-		}
-	} else {
-		//fmt.Println("No tags to remove.")
-	}
-	
-	return original
-}
 
 
 
