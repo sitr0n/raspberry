@@ -50,9 +50,9 @@ type Remote struct {
 	info	  	remote_info
 	alive 		bool
 	send		chan capsule
-	received	chan interface{}
+	Receive		chan interface{}
 	ackchan		chan tag
-	Reconnected	chan bool
+	Connected	chan bool
 	tag_req		chan bool
 	tag_rm		chan tag
 	tag_grant	chan tag	
@@ -76,9 +76,9 @@ func Init(r *[cf.MAX_REMOTES]Remote) {
 		r[i].info 		= address_list[i]
 		r[i].alive 		= false
 		r[i].send 		= make(chan capsule, 100)
-		r[i].received 		= make(chan interface{}, 100)
+		r[i].Receive		= make(chan interface{}, 100)
 		r[i].ackchan 		= make(chan tag, 100)
-		r[i].Reconnected 	= make(chan bool, 100)
+		r[i].Connected 		= make(chan bool, 100)
 		r[i].tag_req 		= make(chan bool, 100)
 		r[i].tag_rm 		= make(chan tag, 100)
 		r[i].tag_grant		= make(chan tag, 100)
@@ -156,7 +156,7 @@ func (r *Remote) remote_listener() {
 		if (r.alive == false) {
 			go r.watchdog(wd_kick)
 			fmt.Println("Connection with remote", r.id, "established!")
-			r.Reconnected <- true
+			r.Connected <- true
 		}
 		wd_kick <- true
 		
@@ -166,13 +166,14 @@ func (r *Remote) remote_listener() {
 		
 		switch message.DataType {
 		case PING:
-			fmt.Println("Received ping:", message)
+			//fmt.Println("Received ping:", message)
 		case ACK:
-			fmt.Println("Received ack:", int(message.ItemData))
+			//fmt.Println("Received ack:", int(message.ItemData))
 			r.handle_ack(message.ItemData)
 		case INT:
-			fmt.Println("Received int:", int(message.ItemData))
+			//fmt.Println("Received int:", int(message.ItemData))
 			r.send_ack(message)
+			r.Receive <- message.ItemData
 		case STRING:
 			fmt.Println("Received string:", string(message.ItemData))
 		default:
@@ -243,7 +244,7 @@ func (r *Remote) Send(idata interface{}) {
 		packet.ItemTag = r.create_tag()
 		r.send <- packet	
 	case int:
-		fmt.Println("Sending int!")
+		//fmt.Println("Sending int!")
 		packet.DataType = INT
 		packet.ItemData= assert_int(idata)
 		packet.ItemTag = r.create_tag()
@@ -301,6 +302,7 @@ func (r *Remote) watchdog(kick <- chan bool) {
 		}
 	}
 	r.alive = false
+	r.Connected <- false
 	fmt.Println("Connection with remote", r.id, "lost.")
 }
 
@@ -321,12 +323,12 @@ func (r *Remote) tag_handler() {
 		case <- r.tag_req:
 			new_tag := make_tag(&id_list)
 			r.tag_grant <- new_tag
-			fmt.Println("Created tag:", new_tag)
+			//fmt.Println("Created tag:", new_tag)
 			
 		case remove := <- r.tag_rm:
 			id_list = remove_tag(id_list, remove)
 			_rm_list = remove_tag(_rm_list, remove)
-			fmt.Println("Removed tag:", remove)
+			//fmt.Println("Removed tag:", remove)
 			
 		case new_ack := <- r.ackchan:
 			_rm_list = add_tag(_rm_list, new_ack)
