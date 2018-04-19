@@ -2,7 +2,7 @@ package main
 import nw "./network"
 import cf "./config"
 import ("fmt"
-	//"time"
+	"time"
 )
 
 
@@ -15,7 +15,8 @@ func main() {
 	go rec(&remote[0])
 	fmt.Println("started...")
 	for {
-		remote[0].Send(-244)
+		time.Sleep(2*time.Second)
+		remote[0].Send(244)
 	}
 }
 
