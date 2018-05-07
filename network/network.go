@@ -65,7 +65,7 @@ func (r *RemoteList) Init() {
 
 	var addrList addr.AddrList
 	r.store = addrList
-	r.store.Init("./data.json")
+	r.store.Init("../data.json")
 	r.localip = getLocalip()
 	
 	n := r.store.GetSize()
