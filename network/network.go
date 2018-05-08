@@ -120,16 +120,11 @@ func (r *Remote) setupDevice(index int) Device {
 func (r *Remote) Add(ip string) {
 	n := len(r.device)
 	r.addDevice(ip)
-	
+	fmt.Println("add stored")
 	go r.device[n].remote_listener(r.localip)
 	
 	r.requestPairing(r.device[n].profile.IP, r.device[n].profile.RPort)
-	
-	TPort := AssertInt(<- r.device[n].Receive)
-	
-	r.setTPort(n, TPort)
-	go r.device[n].remote_broadcaster()
-	r.device[n].Send(ping{})
+	fmt.Println("add requested")
 	
 	timeout := make(chan bool)
 	cancel := make(chan bool)
@@ -139,11 +134,21 @@ func (r *Remote) Add(ip string) {
 		fmt.Println("Pairing failed!")
 		r.store.Remove(r.device[n].profile)	// ----------------------------------------- Replace this with local function which removes the device struct as well
 	
-	case <- r.device[n].Receive:
+	case response := <- r.device[n].Receive:
 		cancel <- true
 		go r.device[n].tag_handler()
 		go r.device[n].ping_remote()
-	}	
+		fmt.Println("Pairing complete!", response)
+	}
+	
+	
+	TPort := AssertInt(<- r.device[n].Receive)
+	fmt.Println("tport received")
+	r.setTPort(n, TPort)
+	go r.device[n].remote_broadcaster()
+	r.device[n].Send(ping{})
+	
+		
 }
 
 func (r *Remote) addDevice(ip string) {
@@ -248,6 +253,7 @@ func (r *Remote) checkIP(address string) bool {
 }
 
 func (r *Remote) requestPairing(ip string, msg string) {
+	fmt.Println("requestPairing:", ip + r.store.GetPairPort())
 	target_addr,err := net.ResolveUDPAddr("udp", ip + r.store.GetPairPort())
 	Check(err)
 	out_connection, err := net.DialUDP("udp", nil, target_addr)
@@ -350,7 +356,7 @@ func (r *Device) remote_broadcaster() {
 }
 
 func (r *Device) remote_listener(localip string) {
-	listen_addr, err := net.ResolveUDPAddr("udp", localip + r.profile.RPort)
+	listen_addr, err := net.ResolveUDPAddr("udp", localip + ":" + r.profile.RPort)
 	Check(err)
 	in_connection, err := net.ListenUDP("udp", listen_addr)
 	Check(err)
