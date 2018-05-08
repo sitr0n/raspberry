@@ -27,6 +27,7 @@ const(
 	ACK	dtype	= 1
 	INT	dtype	= 2
 	STRING	dtype	= 3
+	PAIRING dtype	= 4
 )
 type tag int
 type data int
@@ -395,6 +396,8 @@ func (r *Device) remote_listener(localip string) {
 		case STRING:
 			// ------------------------------------------------------------------ | TODO: Handle received strings
 			fmt.Println("Received string:", string(message.ItemData))
+		case PAIRING:
+			r.Receive <- message.ItemData
 		default:
 			fmt.Println("Received data:", message.ItemData)
 		}
