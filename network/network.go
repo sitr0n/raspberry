@@ -350,7 +350,7 @@ func (r *Device) remote_broadcaster() {
 			encoded, err := json.Marshal(msg)
 			Check(err)
 			out_connection.Write(encoded)
-			fmt.Println("Sent:", msg)
+			fmt.Println("Sent:", msg, "to", r.profile.IP + ":" + r.profile.TPort)
 		}
 	}
 }
@@ -367,6 +367,7 @@ func (r *Device) remote_listener(localip string) {
 	
 	wd_kick := make(chan bool, 100)
 	for {
+		fmt.Println("Starts listening on:", r.profile.RPort)
 		buffer := make([]byte, 1024)
 		length, _, _ := in_connection.ReadFromUDP(buffer)
 		if (r.alive == false) {
@@ -378,6 +379,7 @@ func (r *Device) remote_listener(localip string) {
 		
 		err := json.Unmarshal(buffer[:length], &message)
 		Check(err)
+		fmt.Println("Received:", message.ItemData)
 		//fmt.Println(length, "-----------",message)
 		
 		switch message.DataType {
