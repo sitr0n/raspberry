@@ -137,21 +137,24 @@ func (r *Remote) Add(ip string) {
 	
 	case response := <- r.device[n].Receive:
 		cancel <- true
+		
+		TPort := AssertInt(<- r.device[n].Receive)
+		fmt.Println("tport received")
+		r.setTPort(n, TPort)
+		go r.device[n].remote_broadcaster()
+
+		var packet capsule = capsule{}
+		packet.DataType = PAIRING
+		packet.ItemData = data(420)
+		r.device[n].send <- packet
+		
 		go r.device[n].tag_handler()
 		go r.device[n].ping_remote()
 		fmt.Println("Pairing complete!", response)
 	}
 	
 	
-	TPort := AssertInt(<- r.device[n].Receive)
-	fmt.Println("tport received")
-	r.setTPort(n, TPort)
-	go r.device[n].remote_broadcaster()
 	
-	var packet capsule = capsule{}
-	packet.DataType = PAIRING
-	packet.ItemData = data(420)
-	r.device[n].send <- packet
 }
 
 func (r *Remote) addDevice(ip string) {
