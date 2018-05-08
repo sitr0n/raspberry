@@ -223,7 +223,7 @@ func (r *Remote) pairingListener() {
 			timeout := make(chan bool)
 			cancel := make(chan bool)
 			go Timer(1000, cancel, timeout)
-			
+			go r.device[n].remote_listener(r.localip)
 			select {
 			case <- timeout:
 				fmt.Println("Pairing failed!")
@@ -233,7 +233,7 @@ func (r *Remote) pairingListener() {
 				cancel <- true
 				go r.device[n].tag_handler()
 				go r.device[n].ping_remote()
-				go r.device[n].remote_listener(r.localip)
+				
 			}
 		}
 	}
