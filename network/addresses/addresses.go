@@ -38,7 +38,9 @@ func (a *AddrList) GetSize() int {
 	return n
 }
 
-func (a *AddrList) Add(data AddrData) {
+func (a *AddrList) Add(ip string) {
+	var data AddrData
+	data.IP = ip
 	if (data.RPort == "") {
 		data.RPort = a.makePort()
 		fmt.Println("Found new port:",data.RPort)
@@ -171,6 +173,7 @@ func (a *AddrList) GetIP(index int) string {
 
 
 func (a *AddrList) SetTPort(index int, port int) {
+	fmt.Println("SetTPort (port:", port, ")")
 	assert(port <= 65535, "Can't set the port bigger than 65535.")
 	assert(port >= 1023, "Can't set the port smaller than 1023.")
 	a.data[index].TPort = strconv.Itoa(port)

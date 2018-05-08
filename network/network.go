@@ -39,14 +39,14 @@ type capsule struct {
 type ack struct {
 	ItemTag		data
 }
-// Rename Remote
-type RemoteList struct {
-	remote		[]Remote
+
+type Remote struct {
+	device		[]Device
 	store		addr.AddrList
 	localip		string
 }
-// Rename Device
-type Remote struct {
+
+type Device struct {
 	Receive		chan interface{}
 	Connected	chan bool
 	id		int
@@ -61,7 +61,7 @@ type Remote struct {
 }
 
 var _localip string
-func (r *RemoteList) Init() {
+func (r *Remote) Init() {
 
 	var addrList addr.AddrList
 	r.store = addrList
@@ -69,24 +69,24 @@ func (r *RemoteList) Init() {
 	r.localip = getLocalip()
 	
 	n := r.store.GetSize()
-	r.remote = make([]Remote, n)
+	r.device = make([]Device, n)
 	for i := 0; i < n; i++ {
-		r.remote[i].Receive		= make(chan interface{}, 100)
-		r.remote[i].Connected 		= make(chan bool, 100)
-		r.remote[i].id 			= i
-		r.remote[i].profile		= r.store.GetData(i)	// init element for element?
-		r.remote[i].alive 		= false
-		r.remote[i].send 		= make(chan capsule, 100)
-		r.remote[i].tag_req 		= make(chan bool, 100)
-		r.remote[i].tag_rm 		= make(chan tag, 100)
-		r.remote[i].tag_grant		= make(chan tag, 100)
-		r.remote[i].ackchan 		= make(chan tag, 100)
-		r.remote[i].rm_list		= []tag{}
+		r.device[i].Receive		= make(chan interface{}, 100)
+		r.device[i].Connected 		= make(chan bool, 100)
+		r.device[i].id 			= i
+		r.device[i].profile		= r.store.GetData(i)	// init element for element?
+		r.device[i].alive 		= false
+		r.device[i].send 		= make(chan capsule, 100)
+		r.device[i].tag_req 		= make(chan bool, 100)
+		r.device[i].tag_rm 		= make(chan tag, 100)
+		r.device[i].tag_grant		= make(chan tag, 100)
+		r.device[i].ackchan 		= make(chan tag, 100)
+		r.device[i].rm_list		= []tag{}
 		
-		//go r.remote[i].tag_handler()
-		//go r.remote[i].remote_listener(r.localip)
-		//go r.remote[i].remote_broadcaster()
-		//go r.remote[i].ping_remote()
+		//go r.device[i].tag_handler()
+		//go r.device[i].remote_listener(r.localip)
+		//go r.device[i].remote_broadcaster()
+		//go r.device[i].ping_remote()
 	}
 	
 	go r.pairingListener()
@@ -100,38 +100,9 @@ func assertStr(d interface{}) string {
 		return "0"
 	}
 }
-/*
-func (r *RemoteList) Add_remote(addr string) {
-	// Replace load address, and expose the list for this func
-	
-	r.Receive		= make(chan interface{}, 100)
-	r.Connected 		= make(chan bool, 100)
-	r.id 			= r.store.GetSize()
-	r.profile.IP		= addr
-	//need to expose the damn list
-	r.alive 		= false
-	r.send 			= make(chan capsule, 100)
-	r.tag_req 		= make(chan bool, 100)
-	r.tag_rm 		= make(chan tag, 100)
-	r.tag_grant		= make(chan tag, 100)
-	r.ackchan 		= make(chan tag, 100)
-	r.rm_list		= []tag{}
-	
-	//go r.tag_handler()
-	//go r.remote_listener()
-	//go r.remote_broadcaster()
-	//go r.ping_remote()
-	
-	//add_address(new_addr remote_info) []remote_info
-	//check_if_alive
-	
-	//initialize
-	//share perceived port
-	
-}
-*/
-func (r *RemoteList) setupDevice(index int) Remote {
-	var out Remote
+
+func (r *Remote) setupDevice(index int) Device {
+	var out Device
 	out.Receive		= make(chan interface{}, 100)
 	out.Connected 		= make(chan bool, 100)
 	out.id 			= index
@@ -146,86 +117,159 @@ func (r *RemoteList) setupDevice(index int) Remote {
 	return out
 }
 
-func (r *RemoteList) AddDevice(ip string) {
-	n := len(r.remote)
+func (r *Remote) Add(ip string) {
+	n := len(r.device)
+	r.addDevice(ip)
+	
+	go r.device[n].remote_listener(r.localip)
+	
+	r.requestPairing(r.device[n].profile.IP, r.device[n].profile.RPort)
+	
+	TPort := AssertInt(<- r.device[n].Receive)
+	
+	r.setTPort(n, TPort)
+	go r.device[n].remote_broadcaster()
+	r.device[n].Send(ping{})
+	
+	timeout := make(chan bool)
+	cancel := make(chan bool)
+	go Timer(1000, cancel, timeout)
+	select {
+	case <- timeout:
+		fmt.Println("Pairing failed!")
+		r.store.Remove(r.device[n].profile)	// ----------------------------------------- Replace this with local function which removes the device struct as well
+	
+	case <- r.device[n].Receive:
+		cancel <- true
+		go r.device[n].tag_handler()
+		go r.device[n].ping_remote()
+	}	
+}
+
+func (r *Remote) addDevice(ip string) {
+	n := len(r.device)
 	m := r.store.GetSize()
 	Assert(n == m, "Desync between active- and saved remotes.")
 	
-	var newAddr addr.AddrData
-	newAddr.IP = ip
-	r.store.Add(newAddr)
+	r.store.Add(ip)
 	if (n < 1) {
-		r.remote = make([]Remote, 1)
-		r.remote[0] = r.setupDevice(0)
+		r.device = make([]Device, 1)
+		r.device[0] = r.setupDevice(0)
 	} else {
-		var add Remote
+		var add Device
 		add = r.setupDevice(n)
-		tmpList := make([]Remote, n+1)
-		copy(tmpList, r.remote)
-		r.remote = tmpList
-		r.remote = r.remote[0 : n+1]
-		r.remote[n] = add
+		tmpList := make([]Device, n+1)
+		copy(tmpList, r.device)
+		r.device = tmpList
+		r.device = r.device[0 : n+1]
+		r.device[n] = add
 	}
-	
-	go r.remote[n].remote_listener(r.localip)
-	
-	r.requestPairing(r.remote[n].profile.IP, r.remote[n].profile.RPort)
-	// start timer to remove store and remote if no response
-	TPort := AssertInt(<- r.remote[n].Receive)
-	
-	r.store.SetTPort(n, TPort)
-	r.remote[n].profile = r.store.GetData(n)
-	
-	go r.remote[n].remote_broadcaster()
-	go r.remote[n].tag_handler()
-	go r.remote[n].ping_remote()
 }
 
-func (r *RemoteList) GetSize() int {
-	n := r.store.GetSize()
-	return n
-}
-
-func (r *RemoteList) pairingListener() {
+func (r *Remote) pairingListener() {
 	listen_addr, err := net.ResolveUDPAddr("udp", r.localip + r.store.GetPairPort())
-	check(err)
+	Check(err)
 	in_connection, err := net.ListenUDP("udp", listen_addr)
-	check(err)
+	Check(err)
 	defer in_connection.Close()
 	
 	var message capsule
 	
 	for {
 		buffer := make([]byte, 1024)
-		length, _, _ := in_connection.ReadFromUDP(buffer)
+		length, adr, _ := in_connection.ReadFromUDP(buffer)
 		
 		err := json.Unmarshal(buffer[:length], &message)
-		check(err)
-		
-		fmt.Println("Received pairing request from:", in_connection.RemoteAddr)
+		Check(err)
+		IP := stripPort(adr.String())
+		ok := r.checkIP(IP)
+		if (ok) {
+			fmt.Println("New IP found!")
+			var msg interface{}
+			msg = message.ItemData
+			var port int = int(msg.(data))
+			
+			n := r.store.GetSize()
+			r.addDevice(IP)
+			
+			r.setTPort(n, port)
+			fmt.Println("New device stored!")
+			
+			go r.device[n].remote_broadcaster()
+
+			rport, _ := strconv.Atoi(r.device[n].profile.RPort)
+			
+			var packet capsule = capsule{}
+			packet.DataType = INT
+			packet.ItemData = data(rport)
+			r.device[n].send <- packet
+			
+			timeout := make(chan bool)
+			cancel := make(chan bool)
+			go Timer(1000, cancel, timeout)
+			
+			select {
+			case <- timeout:
+				fmt.Println("Pairing failed!")
+				r.store.Remove(r.device[n].profile)	// ----------------------------------------- Replace this with local function which removes the device struct as well
+			
+			case <- r.device[n].Receive:
+				cancel <- true
+				go r.device[n].tag_handler()
+				go r.device[n].ping_remote()
+				go r.device[n].remote_listener(r.localip)
+			}
+		}
 	}
-	
 }
 
-func (r *RemoteList) requestPairing(ip string, msg string) {
+
+
+func (r *Remote) Reset() {
+	fmt.Println("Resetting...")
+	r.device = nil
+	r.store.ClearAllData()
+}
+
+func (r *Remote) setTPort(index int, port int) {
+	r.store.SetTPort(index, port)
+	r.device[index].profile = r.store.GetData(index)
+	fmt.Println("After setting tport:", r.device[index].profile.TPort)
+}
+
+func (r *Remote) checkIP(address string) bool {
+	check := true
+	for _, dev := range r.device {
+		if (dev.profile.IP == address) {
+			check = false
+		}
+	}
+	return check
+}
+
+func (r *Remote) requestPairing(ip string, msg string) {
 	target_addr,err := net.ResolveUDPAddr("udp", ip + r.store.GetPairPort())
-	check(err)
+	Check(err)
 	out_connection, err := net.DialUDP("udp", nil, target_addr)
-	check(err)
+	Check(err)
 	defer out_connection.Close()
 	
 	rPort, err := strconv.Atoi(msg)
 	Assert(err == nil, "Pairing request failed to send")
 	
-	encoded, err := json.Marshal(rPort)
-	check(err)
+	var packet capsule = capsule{}
+	packet.DataType = INT
+	packet.ItemData = data(rPort)
+	
+	encoded, err := json.Marshal(packet)
+	Check(err)
 	out_connection.Write(encoded)
 	//fmt.Println("Sent:", msg)
 }
 
-func (r *Remote) Send(idata interface{}) {
+func (r *Device) Send(idata interface{}) {
 	var packet capsule = capsule{}
-	
+	fmt.Println("Sending", idata, "from device id:", r.id)
 	switch DataType := idata.(type) {
 	case ping:
 		//fmt.Println("Sending ping!")
@@ -240,13 +284,15 @@ func (r *Remote) Send(idata interface{}) {
 		packet.ItemTag = r.create_tag()
 		r.send <- packet	
 	case int:
-		//fmt.Println("Sending int!")
+		fmt.Println("Sending int!")
 		packet.DataType = INT
 		packet.ItemData= assert_int(idata)
 		packet.ItemTag = r.create_tag()
+		fmt.Println("sender starting")
 		go r.sender(packet)
+		fmt.Println("sender started")
 	case string:
-		//fmt.Println("Sending string!")
+		fmt.Println("Sending string!")
 		packet.DataType = STRING
 		packet.ItemData= 0
 		packet.ItemTag = r.create_tag()
@@ -256,7 +302,7 @@ func (r *Remote) Send(idata interface{}) {
 	}
 }
 
-func (r *Remote) sender(packet capsule) {
+func (r *Device) sender(packet capsule) {
 	
 	miss := 0
 	for {
@@ -273,7 +319,7 @@ func (r *Remote) sender(packet capsule) {
 	}
 }
 
-func (r *Remote) checkForAck(t tag) bool {
+func (r *Device) checkForAck(t tag) bool {
 	for _, e := range r.rm_list {
 		if (t == e) {
 			return true
@@ -282,29 +328,32 @@ func (r *Remote) checkForAck(t tag) bool {
 	return false
 }
 
-func (r *Remote) remote_broadcaster() {
-	target_addr,err := net.ResolveUDPAddr("udp", r.profile.IP + r.profile.TPort)
-	check(err)
+func (r *Device) remote_broadcaster() {
+	fmt.Println("Starting bcast....")
+	fmt.Println(r.profile.IP + ":" + r.profile.TPort)
+	target_addr,err := net.ResolveUDPAddr("udp", r.profile.IP + ":" + r.profile.TPort)
+	Check(err)
 	out_connection, err := net.DialUDP("udp", nil, target_addr)
-	check(err)
+	Check(err)
 	defer out_connection.Close()
-
+	
+	fmt.Println("Started bcast!")
 	for {
 		select {
 		case msg := <- r.send:
 			encoded, err := json.Marshal(msg)
-			check(err)
+			Check(err)
 			out_connection.Write(encoded)
-			//fmt.Println("Sent:", msg)
+			fmt.Println("Sent:", msg)
 		}
 	}
 }
 
-func (r *Remote) remote_listener(localip string) {
+func (r *Device) remote_listener(localip string) {
 	listen_addr, err := net.ResolveUDPAddr("udp", localip + r.profile.RPort)
-	check(err)
+	Check(err)
 	in_connection, err := net.ListenUDP("udp", listen_addr)
-	check(err)
+	Check(err)
 	defer in_connection.Close()
 	//var ack ack
 	
@@ -316,13 +365,13 @@ func (r *Remote) remote_listener(localip string) {
 		length, _, _ := in_connection.ReadFromUDP(buffer)
 		if (r.alive == false) {
 			go r.watchdog(wd_kick)
-			fmt.Println("Connection with remote", r.id, "established!")
+			fmt.Println("Connection with device", r.id, "established!")
 			r.Connected <- true
 		}
 		wd_kick <- true
 		
 		err := json.Unmarshal(buffer[:length], &message)
-		check(err)
+		Check(err)
 		//fmt.Println(length, "-----------",message)
 		
 		switch message.DataType {
@@ -345,11 +394,11 @@ func (r *Remote) remote_listener(localip string) {
 	}
 }
 
-func (r *Remote) handle_ack(d data) {
+func (r *Device) handle_ack(d data) {
 	//r.tag_rm <- tag(d)
 	r.ackchan <- tag(d)
 }
-func (r *Remote) ping_remote() {
+func (r *Device) ping_remote() {
 	const active	time.Duration = time.Duration(_PING_PERIOD)*time.Millisecond
 	const idle 	time.Duration = 5*time.Second
 	//var p = ping{}
@@ -364,7 +413,7 @@ func (r *Remote) ping_remote() {
 	}
 }
 
-func (r *Remote) send_ack(reference capsule) {
+func (r *Device) send_ack(reference capsule) {
 	var response ack = ack{}
 	response.ItemTag = item_tag2data(reference)
 	r.Send(response)
@@ -416,7 +465,7 @@ func flush_channel(c <- chan interface{}) {
 	}
 }
 
-func (r *Remote) watchdog(kick <- chan bool) {
+func (r *Device) watchdog(kick <- chan bool) {
 	r.alive = true
 	for i := 0; i < 10; i++ {
 		time.Sleep(time.Duration(_PING_PERIOD)*time.Millisecond)
@@ -428,18 +477,23 @@ func (r *Remote) watchdog(kick <- chan bool) {
 	}
 	r.alive = false
 	r.Connected <- false
-	fmt.Println("Connection with remote", r.id, "lost.")
+	fmt.Println("Connection with device", r.id, "lost.")
 }
 
 func getLocalip() string {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
-	check(err)
+	Check(err)
 	defer conn.Close()
 
-	ip_with_port := conn.LocalAddr().String()
+	address := conn.LocalAddr().String()
+	ip := stripPort(address)
+	
+	return ip
+}
 
+func stripPort(address string) string {
 	var ip string = ""
-	for _, char := range ip_with_port {
+	for _, char := range address {
 		if (char == ':') {
 			break
 		}
@@ -448,10 +502,9 @@ func getLocalip() string {
 	return ip
 }
 
-
-
-func check(e error) {
-	if (e != nil) {
-		panic(e)
-	}
+func (r *Remote) GetSize() int {
+	n := r.store.GetSize()
+	m := len(r.device)
+	Assert(n == m, "Mismatched size of active devices and stored addresses")
+	return n
 }

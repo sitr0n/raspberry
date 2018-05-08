@@ -9,9 +9,10 @@ import ("fmt"
 const REMOTES = 2
 func main() {
 	test := make(chan bool)
-	var remote nw.RemoteList
+	var remote nw.Remote
 	fmt.Println("Initing..")
 	remote.Init()
+	remote.Reset()
 	fmt.Println("done..")
 	fmt.Println(remote.GetSize())
 	<- test
@@ -30,7 +31,7 @@ func main() {
 	*/
 }
 
-func rec(remote *nw.Remote) {
+func rec(remote *nw.Device) {
 	for {
 		select {
 		case input := <- remote.Receive:

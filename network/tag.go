@@ -4,13 +4,13 @@ import ("fmt"
 	"math/rand"
 )
 
-func (r *Remote) create_tag() tag {
+func (r *Device) create_tag() tag {
 	r.tag_req <- true
 	granted := <- r.tag_grant
 	return granted
 }
 
-func (r *Remote) tag_handler() {
+func (r *Device) tag_handler() {
 	
 	var id_list []tag = []tag{}
 	for { 
