@@ -147,9 +147,11 @@ func (r *Remote) Add(ip string) {
 	fmt.Println("tport received")
 	r.setTPort(n, TPort)
 	go r.device[n].remote_broadcaster()
-	r.device[n].Send(420)
 	
-		
+	var packet capsule = capsule{}
+	packet.DataType = PAIRING
+	packet.ItemData = data(420)
+	r.device[n].send <- packet
 }
 
 func (r *Remote) addDevice(ip string) {
