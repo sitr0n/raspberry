@@ -139,7 +139,11 @@ func (r *Remote) Add(ip string) {
 		fmt.Println("pairing data landed in Add func")
 		cancel <- true
 		
-		TPort := AssertInt(response)
+		var msg interface{}
+		msg = response
+		var TPort int = int(msg.(data))
+		
+		//TPort := AssertInt(data(response))
 		fmt.Println("tport received")
 		r.setTPort(n, TPort)
 		go r.device[n].remote_broadcaster()

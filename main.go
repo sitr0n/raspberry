@@ -15,7 +15,7 @@ func main() {
 	remote.Reset()
 	fmt.Println("done..")
 	fmt.Println(remote.GetSize())
-	remote.Add("192.168.1.214")
+	//remote.Add("192.168.1.214")
 	<- test
 	//var r nw.Remote
 	
