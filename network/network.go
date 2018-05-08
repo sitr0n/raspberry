@@ -122,7 +122,7 @@ func (r *Remote) Add(ip string) {
 	r.addDevice(ip)
 	fmt.Println("add stored")
 	go r.device[n].remote_listener(r.localip)
-	
+	time.Sleep(time.Second)
 	r.requestPairing(r.device[n].profile.IP, r.device[n].profile.RPort)
 	fmt.Println("add requested")
 	
