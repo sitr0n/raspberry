@@ -206,7 +206,7 @@ func (r *Remote) pairingListener() {
 			rport, _ := strconv.Atoi(r.device[n].profile.RPort)
 			
 			var packet capsule = capsule{}
-			packet.DataType = INT
+			packet.DataType = PAIRING
 			packet.ItemData = data(rport)
 			r.device[n].send <- packet
 			
@@ -265,7 +265,7 @@ func (r *Remote) requestPairing(ip string, msg string) {
 	Assert(err == nil, "Pairing request failed to send")
 	
 	var packet capsule = capsule{}
-	packet.DataType = INT
+	packet.DataType = PAIRING
 	packet.ItemData = data(rPort)
 	
 	encoded, err := json.Marshal(packet)
