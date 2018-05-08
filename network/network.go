@@ -136,6 +136,7 @@ func (r *Remote) Add(ip string) {
 		r.store.Remove(r.device[n].profile)	// ----------------------------------------- Replace this with local function which removes the device struct as well
 	
 	case response := <- r.device[n].Receive:
+		fmt.Println("pairing data landed in Add func")
 		cancel <- true
 		
 		TPort := AssertInt(<- r.device[n].Receive)
@@ -402,6 +403,7 @@ func (r *Device) remote_listener(localip string) {
 			// ------------------------------------------------------------------ | TODO: Handle received strings
 			fmt.Println("Received string:", string(message.ItemData))
 		case PAIRING:
+			fmt.Println("Found pairing data, sending to Receive")
 			r.Receive <- message.ItemData
 		default:
 			fmt.Println("Received data:", message.ItemData)
